@@ -22,6 +22,13 @@ try:
 except ImportError: # python 2
   import urllib as urlParse
 
+try:
+  # Python 2
+  xrange
+except NameError:
+  # Python 3, xrange is now named range
+  xrange = range
+
 __author__ = 'arulraj'
 
 DEFAULT_STOCK_CODE_LIST = [
@@ -148,9 +155,9 @@ class Quote(object):
   """
   Referred from http://trading.cheno.net/downloading-google-intraday-historical-data-with-python/
   """
-  def __init__(self):
-    self.symbol = ''
-    self.exchange = ''
+  def __init__(self, symbol, exchange=''):
+    self.symbol = symbol
+    self.exchange = exchange
     self.date, self.time, self.open_, self.high, self.low, self.close, self.volume = ([] for _ in range(7))
 
   def append(self, dt, open_, high, low, close, volume):
@@ -296,11 +303,10 @@ def get_history_stock_info(stock_name, interval, _range):
 
   if timestamp_list and open_list and close_list and high_list and low_list and volume_list:
     for (dt, open_, high, low, close, volume) in zip(timestamp_list, open_list, high_list, low_list, close_list, volume_list):
-      q = Quote()
-      if dt and open_ and high and low and close and volume:
+      q = Quote(stock_name)
+      if dt != None and open_ != None and high != None and low != None and close != None and volume != None:
         q.append(datetime.datetime.fromtimestamp(dt), '{0:.2f}'.format(open_), '{0:.2f}'.format(high), '{0:.2f}'.format(low), '{0:.2f}'.format(close), volume)
         quotes.append(q)
-
   return quotes
 
 
