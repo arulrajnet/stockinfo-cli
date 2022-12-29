@@ -3,11 +3,8 @@
 
 from collections import namedtuple
 from datetime import timedelta
-import itertools
 import json
 import datetime
-import math
-import pytz
 import re
 import sys
 import getopt
@@ -48,9 +45,9 @@ DEFAULT_INTERVAL = ['1M', '3M', '6M']
 
 DEFAULT_HEADER = ["Index", "Current", "Change_pts", "Updated_on"]
 
-API_FOR_CURRENT_STOCK="https://query1.finance.yahoo.com/v7/finance/quote?lang=en-US&region=US&corsDomain=finance.yahoo.com&symbols={0}"
+API_FOR_CURRENT_STOCK="https://query1.finance.yahoo.com/v7/finance/quote?symbols={0}"
 
-API_FOR_HISTORY_STOCK="https://query1.finance.yahoo.com/v8/finance/chart/{0}?region=US&lang=en-US&includePrePost=false&interval={1}&useYfid=true&range={2}&corsDomain=finance.yahoo.com&.tsrc=finance"
+API_FOR_HISTORY_STOCK="https://query1.finance.yahoo.com/v8/finance/chart/{0}?includePrePost=false&interval={1}&useYfid=true&range={2}"
 
 given_intervals = None
 
@@ -415,7 +412,7 @@ def parse_content(content):
         i_high_low_value = "⇓ %s, ⇑ %s" % (i_high_low["low"], i_high_low["high"])
       i_high_low_list.append(i_high_low_value)
 
-    stock_updated_on = datetime.datetime.fromtimestamp(stock_resp["regularMarketTime"], pytz.timezone(stock_resp["exchangeTimezoneName"])).strftime("%b %d, %I:%M%p %Z")
+    stock_updated_on = datetime.datetime.fromtimestamp(stock_resp["regularMarketTime"], tz=datetime.timezone(datetime.timedelta(milliseconds=stock_resp["gmtOffSetMilliseconds"]))).strftime("%b %d, %I:%M%p %Z")
     stock_value = '{0:.2f}'.format(stock_resp["regularMarketPrice"])
     stock_change_value = '{0:.2f}'.format(stock_resp["regularMarketChange"])
     stock_change_percent = '{0:.2f}'.format(stock_resp["regularMarketChangePercent"])

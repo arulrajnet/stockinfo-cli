@@ -27,7 +27,7 @@ Earlier I used these scrips which are depends on Google Finance API. Those are s
 
 [stockmarketindia.py](https://gist.github.com/arulrajnet/21addbacdbdfd6e190f4)
 
-This repo is using Yahoo Finance API :smiley: I heard your voice, [refer](API.md#alternative)
+This repo is using Yahoo Finance API :smiley: I heard your voice, [refer](API.md#alternative) for alternatives for the future.
 
 ## Tips
 
