@@ -3,8 +3,10 @@
 
 from collections import namedtuple
 from datetime import timedelta
+import itertools
 import json
 import datetime
+import math
 import pytz
 import re
 import sys
@@ -14,6 +16,11 @@ try:
   from urllib.request import Request, urlopen
 except ImportError:  # python 2
   from urllib2 import Request, urlopen
+
+try:
+  import urllib.parse as urlParse
+except ImportError: # python 2
+  import urllib as urlParse
 
 __author__ = 'arulraj'
 
@@ -30,7 +37,6 @@ DEFAULT_STOCK_CODE_LIST = [
 
 INTERVAL_REGEX = [r'[0-9]+d', r'[0-9]+m', r'[0-9]+y']
 
-# DEFAULT_INTERVAL = ['5D', '1M', '3M', '6M', '1Y']
 DEFAULT_INTERVAL = ['1M', '3M', '6M']
 
 DEFAULT_HEADER = ["Index", "Current", "Change_pts", "Updated_on"]
@@ -97,6 +103,46 @@ class Interval(object):
       else:
         return 0
 
+  def __eq__(self, other):
+    return self.alphabet == other.alphabet and self.numeric == other.numeric
+
+  def __ne__(self, other):
+    return self.alphabet != other.alphabet or self.numeric != other.numeric
+
+  def __lt__(self, other):
+    if self.alphabet < other.alphabet:
+      return True
+    elif self.alphabet > other.alphabet:
+      return False
+    else:
+      return self.alphabet == other.alphabet and self.numeric < other.numeric
+
+  def __le__(self, other):
+    if self.alphabet < other.alphabet:
+      return True
+    elif self.alphabet > other.alphabet:
+      return False
+    else:
+      return self.alphabet == other.alphabet and self.numeric <= other.numeric
+
+  def __gt__(self, other):
+    if self.alphabet > other.alphabet:
+      return True
+    elif self.alphabet < other.alphabet:
+      return False
+    else:
+      return self.alphabet == other.alphabet and self.numeric > other.numeric
+
+  def __ge__(self, other):
+    if self.alphabet > other.alphabet:
+      return True
+    elif self.alphabet < other.alphabet:
+      return False
+    else:
+      return self.alphabet == other.alphabet and self.numeric >= other.numeric
+
+  def __repr__(self):
+    return "%s%s" % (self.numeric, self.alphabet)
 
 class Quote(object):
   """
@@ -226,23 +272,35 @@ def get_history_stock_info(stock_name, interval, _range):
   """
   stock_name = stock_name.upper()
   url_string = API_FOR_HISTORY_STOCK.format(stock_name, interval, _range)
-  csv = get_content(url_string, is_list=True)
-  quotes = []
-  for bar in xrange(7, len(csv)):
-      if csv[bar].count(',') != 5:
-        continue
-      offset, close, high, low, open_, volume = csv[bar].split(',')
-      if offset[0] == 'a':
-        day = float(offset[1:])
-        offset = 0
-      else:
-        offset = float(offset)
-      open_, high, low, close = [float(x) for x in [open_, high, low, close]]
-      dt = datetime.datetime.fromtimestamp(day + (interval * offset))
+  json_content = json.loads(get_content(url_string))
 
+  chart_result = None
+  if json_content and json_content["chart"] and json_content["chart"]["result"] and json_content["chart"]["result"][0]:
+    chart_result = json_content["chart"]["result"][0]
+
+  timestamp_list = None
+  open_list = None
+  close_list = None
+  high_list = None
+  low_list = None
+  volume_list = None
+  if chart_result:
+    timestamp_list = chart_result["timestamp"]
+    open_list = chart_result["indicators"]["quote"][0]["open"]
+    close_list = chart_result["indicators"]["quote"][0]["close"]
+    high_list = chart_result["indicators"]["quote"][0]["high"]
+    low_list = chart_result["indicators"]["quote"][0]["low"]
+    volume_list = chart_result["indicators"]["quote"][0]["volume"]
+
+  quotes = []
+
+  if timestamp_list and open_list and close_list and high_list and low_list and volume_list:
+    for (dt, open_, high, low, close, volume) in zip(timestamp_list, open_list, high_list, low_list, close_list, volume_list):
       q = Quote()
-      q.append(dt, open_, high, low, close, volume)
-      quotes.append(q)
+      if dt and open_ and high and low and close and volume:
+        q.append(datetime.datetime.fromtimestamp(dt), '{0:.2f}'.format(open_), '{0:.2f}'.format(high), '{0:.2f}'.format(low), '{0:.2f}'.format(close), volume)
+        quotes.append(q)
+
   return quotes
 
 
@@ -259,18 +317,19 @@ def stock_low_high_info(intervals):
   now = datetime.now()
 
   for stock_code in given_stock_codes:
-    exchange_name = stock_code.split(":")[0]
-    stock_name = stock_code.split(":")[1]
-    intervals_sort = sorted(intervals)
-    _range = str(intervals_sort[-1])
-    if intervals_sort[-1].alphabet == "D":
+    stock_name = urlParse.unquote(stock_code)
+    _range = str(intervals[-1])
+    if intervals[-1].alphabet == "D":
+      _range = _range.lower()
+    if intervals[-1].alphabet == "M":
+      _range = _range.lower().replace("m", "mo")
+    if intervals[-1].alphabet == "Y":
       _range = _range.lower()
     quotes = get_history_stock_info(stock_name, "1d", _range)
 
     high_low_dict = dict()
 
-    for interval in intervals_sort:
-
+    for interval in intervals:
       interval_time = None
       if interval.alphabet == "D":
         interval_time = daydelta(now, -interval.numeric)
@@ -292,18 +351,14 @@ def stock_low_high_info(intervals):
   return stock_low_high_dict
 
 
-def get_content(url, is_list=False):
+def get_content(url):
   """
   Get content of url as string
   :return:
   """
   req = Request(url)
   resp = urlopen(req)
-  if is_list:
-    content = resp.readlines()
-  else:
-    content = resp.read().decode('ascii', 'ignore').strip()
-  return content
+  return resp.read().decode('ascii', 'ignore').strip()
 
 
 def parse_content(content):
@@ -319,17 +374,21 @@ def parse_content(content):
     stock_resp_list = json_content["quoteResponse"]["result"]
 
   interval_list = list()
+  sorted_interval_list = list()
   table_header_list = list()
 
   for i in given_intervals:
     interval = Interval.build(i)
     if interval:
       interval_list.append(interval)
+
+  sorted_interval_list = sorted(interval_list)
+  for interval in sorted_interval_list:
       table_header_list.append(interval.as_table_header())
 
   stock_high_low_dict = dict()
-  if len(interval_list) > 0:
-    stock_high_low_dict = stock_low_high_info(interval_list)
+  if len(sorted_interval_list) > 0:
+    stock_high_low_dict = stock_low_high_info(sorted_interval_list)
 
   DEFAULT_HEADER.extend(table_header_list)
 
@@ -339,11 +398,11 @@ def parse_content(content):
   for stock_resp in stock_resp_list:
 
     stock_high_low = dict()
-    if stock_resp["shortName"] in stock_high_low_dict:
-      stock_high_low = stock_high_low_dict[stock_resp["t"]]
+    if stock_resp["symbol"] in stock_high_low_dict:
+      stock_high_low = stock_high_low_dict[stock_resp["symbol"]]
 
     i_high_low_list = list()
-    for interval in interval_list:
+    for interval in sorted_interval_list:
       i_high_low_value = ""
       if str(interval) in stock_high_low:
         i_high_low = stock_high_low[str(interval)]
@@ -351,9 +410,9 @@ def parse_content(content):
       i_high_low_list.append(i_high_low_value)
 
     stock_updated_on = datetime.datetime.fromtimestamp(stock_resp["regularMarketTime"], pytz.timezone(stock_resp["exchangeTimezoneName"])).strftime("%b %d, %I:%M%p %Z")
-    stock_value = '{0:,.2f}'.format(stock_resp["regularMarketPrice"])
-    stock_change_value = '{0:,.2f}'.format(stock_resp["regularMarketChange"])
-    stock_change_percent = '{0:,.2f}'.format(stock_resp["regularMarketChangePercent"])
+    stock_value = '{0:.2f}'.format(stock_resp["regularMarketPrice"])
+    stock_change_value = '{0:.2f}'.format(stock_resp["regularMarketChange"])
+    stock_change_percent = '{0:.2f}'.format(stock_resp["regularMarketChangePercent"])
 
     stockInfo = StockInfo(stock_resp["shortName"], stock_value, "%s(%s%%)" % (stock_change_value, stock_change_percent), stock_updated_on, *i_high_low_list)
     list_stock.append(stockInfo)
@@ -371,7 +430,7 @@ def pprinttable(rows):
         headers = rows[0]._fields
         lens = []
         for i in range(len(rows[0])):
-          lens.append(len(max([x[i] for x in rows] + [headers[i]], key=lambda x: len(str(x)))))
+          lens.append(len(max([str(x[i]) for x in rows] + [headers[i]], key=lambda x: len(str(x)))))
         formats = []
         hformats = []
         for i in range(len(rows[0])):
@@ -450,11 +509,10 @@ if __name__ == "__main__":
     sys.exit(2)
 
   for o, a in myopts:
+    a_list = [s.strip() for s in str(a).upper().split(',')]
     if o == '-i':
-      a_list = str(a).split(',')
       given_intervals = a_list
     if o == '-s':
-      a_list = str(a).split(',')
       given_stock_codes = a_list
 
   json_content = get_current_stock_info()
