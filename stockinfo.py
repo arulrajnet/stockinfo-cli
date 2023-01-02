@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 from collections import namedtuple
@@ -519,7 +519,8 @@ if __name__ == "__main__":
   """
 
   # To work ANSI escape sequences in windows.
-  os.system('color')
+  if os.name == 'nt':
+    os.system('color')
 
   given_intervals = list()
   given_stock_codes = DEFAULT_STOCK_CODE_LIST
