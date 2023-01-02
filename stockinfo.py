@@ -5,6 +5,7 @@ from collections import namedtuple
 from datetime import timedelta
 import json
 import datetime
+import os
 import re
 import sys
 import getopt
@@ -417,10 +418,24 @@ def parse_content(content):
     stock_change_value = '{0:.2f}'.format(stock_resp["regularMarketChange"])
     stock_change_percent = '{0:.2f}'.format(stock_resp["regularMarketChangePercent"])
 
-    stockInfo = StockInfo(stock_resp["shortName"], stock_value, "%s(%s%%)" % (stock_change_value, stock_change_percent), stock_updated_on, *i_high_low_list)
+    isPositive = True if stock_change_percent != None and float(stock_change_percent) > 0 else False
+
+    colored_stock_change_percent = stock_change_percent+"%"
+    if isPositive:
+      colored_stock_change_percent = Color.green(stock_change_percent+"%")
+    else:
+      colored_stock_change_percent = Color.red(stock_change_percent+"%")
+
+    stockInfo = StockInfo(stock_resp["shortName"], stock_value, "%s(%s)" % (stock_change_value, colored_stock_change_percent), stock_updated_on, *i_high_low_list)
     list_stock.append(stockInfo)
   return list_stock
 
+
+def nonAsciiStrLength(text):
+  return len(str(removeAscii(text)))
+
+def removeAscii(text):
+  return re.compile(r'\x1b[^m]*m').sub('', text)
 
 def pprinttable(rows):
     """
@@ -432,15 +447,17 @@ def pprinttable(rows):
     if len(rows) > 1:
         headers = rows[0]._fields
         lens = []
+        lensWithAscii = []
         for i in range(len(rows[0])):
-          lens.append(len(max([str(x[i]) for x in rows] + [headers[i]], key=lambda x: len(str(x)))))
+          lens.append(len(max([str(removeAscii(x[i])) for x in rows] + [headers[i]], key=lambda x: len(str(x)))))
+          lensWithAscii.append(len(max([str(x[i]) for x in rows] + [headers[i]], key=lambda x: len(str(x)))))
         formats = []
         hformats = []
         for i in range(len(rows[0])):
           if isinstance(rows[0][i], int):
-            formats.append("%%%dd" % lens[i])
+            formats.append("%%%dd" % lensWithAscii[i])
           else:
-            formats.append("%%-%ds" % lens[i])
+            formats.append("%%-%ds" % lensWithAscii[i])
           hformats.append("%%-%ds" % lens[i])
         pattern = " | ".join(formats)
         hpattern = " | ".join(hformats)
@@ -500,6 +517,9 @@ if __name__ == "__main__":
   - Detailed info
       - stockinfo -i 5d,1m,3m,6m,1y
   """
+
+  # To work ANSI escape sequences in windows.
+  os.system('color')
 
   given_intervals = list()
   given_stock_codes = DEFAULT_STOCK_CODE_LIST

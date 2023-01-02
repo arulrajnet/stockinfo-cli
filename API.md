@@ -21,3 +21,11 @@ range = this is to get the history info
 # Alternative
 
 Yahoo Finance API alternative for indian stock market
+
+Refer these repo's for NSE/BSE API's to get data
+
+https://github.com/vsjha18/nsetools/blob/master/nse.py
+
+https://github.com/swapniljariwala/nsepy
+
+https://github.com/maanavshah/stock-market-india/blob/master/bse/constant.js
