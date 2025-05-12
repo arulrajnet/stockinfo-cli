@@ -112,3 +112,6 @@ Mostly don't want to add any extra feature if its deviate from [why-this](#why-t
     <img src="https://custom-icon-badges.demolab.com/badge/LinkedIn-arulrajnet-0A66C2?style=for-the-badge&logo=linkedin-white&logoColor=white" alt="LinkedIn @arulrajnet">
   </a>
 </p>
+
+
+[mit_license]: LICENSE
